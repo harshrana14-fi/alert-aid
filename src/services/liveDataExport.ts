@@ -220,8 +220,17 @@ Real-time data integration with ML predictions
 const fetchMLMetrics = async () => {
   try {
     // Use environment variable or fallback to localhost
-    const rawApiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-    const API_BASE_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+    const getApiBaseUrl = (): string => {
+      const envUrl = process.env.REACT_APP_API_URL;
+      if (envUrl && envUrl.trim() !== '') {
+        return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+      }
+      if (process.env.NODE_ENV === 'production') {
+        return ''; // Same origin for Vercel
+      }
+      return 'http://127.0.0.1:8000';
+    };
+    const API_BASE_URL = getApiBaseUrl();
     const response = await fetch(`${API_BASE_URL}/api/predict/ml-metrics`);
     const data = await response.json();
     

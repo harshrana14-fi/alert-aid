@@ -3,7 +3,8 @@
  * 64px compact navigation with enhanced location service integration
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { useGeolocation } from '../Location/GeolocationManager';
 import styled from 'styled-components';
 import { 
   Home, 
@@ -21,7 +22,6 @@ import {
   productionColors, 
   productionAnimations
 } from '../../styles/production-ui-system';
-import { enhancedLocationService } from '../../services/enhancedLocationService';
 import { LiveStatusBadge, GPSStatusBadge, LastUpdatedBadge } from '../common/StatusBadges';
 
 const NavigationContainer = styled.nav`
@@ -326,12 +326,16 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   currentPage = 'dashboard',
   onNavigate 
 }) => {
-  const [locationString, setLocationString] = useState('Detecting location...');
-  const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const { 
+    locationState, 
+    refreshLocation, 
+    setManualLocation, 
+    isLive, 
+    isGPSEnabled, 
+    lastUpdated 
+  } = useGeolocation();
+  
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLive, setIsLive] = useState(false);
-  const [isGPSEnabled, setIsGPSEnabled] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
   const [showManualLocationModal, setShowManualLocationModal] = useState(false);
 
   // Navigation items
@@ -343,179 +347,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     { id: 'evacuation', label: 'Evacuation Routes', icon: Shield },
   ];
 
-  const updateLocation = useCallback(async () => {
-    setIsLocationLoading(true);
-    setIsLive(false); // Set to offline during update
-    try {
-      // CLEAR ALL CACHES to prevent stale location data
-      console.log('🗑️ Clearing ALL location caches...');
-      localStorage.removeItem('enhanced-location-cache');
-      localStorage.removeItem('alertaid-location');
-      
-      // Use browser geolocation API directly for most accurate results
-      if ('geolocation' in navigator) {
-        console.log('📍 Requesting fresh GPS location...');
-        
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0 // Force fresh position
-          });
-        });
-        
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        
-        console.log(`✅ GPS coordinates obtained: ${lat}, ${lon}`);
-        
-        // Reverse geocode using Nominatim (most accurate)
-        let locationData: any;
-        try {
-          const nominatimResponse = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`,
-            {
-              headers: { 'User-Agent': 'AlertAid-DisasterApp/1.0' }
-            }
-          );
-          
-          const nominatimData = await nominatimResponse.json();
-          if (nominatimData && nominatimData.address) {
-            const addr = nominatimData.address;
-            const cityName = addr.city || addr.town || addr.village || addr.suburb || 
-                            addr.municipality || addr.county || 'Unknown';
-            locationData = {
-              latitude: lat,
-              longitude: lon,
-              city: cityName,
-              state: addr.state || addr.state_district || '',
-              country: addr.country || 'Unknown',
-              address: nominatimData.display_name,
-              source: 'gps',
-              timestamp: Date.now(),
-              isManual: false
-            };
-            console.log('✅ Nominatim geocode:', cityName);
-          } else {
-            throw new Error('Nominatim failed');
-          }
-        } catch (e) {
-          // Fallback to OpenWeatherMap
-          console.warn('Nominatim failed, using OpenWeatherMap');
-          const response = await fetch(
-            `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=1801423b3942e324ab80f5b47afe0859`
-          );
-          const data = await response.json();
-          locationData = data && data.length > 0 ? {
-            latitude: lat,
-            longitude: lon,
-            city: data[0].name || 'Unknown',
-            state: data[0].state || '',
-            country: data[0].country || 'Unknown',
-            source: 'gps',
-            timestamp: Date.now(),
-            isManual: false
-          } : {
-            latitude: lat,
-            longitude: lon,
-            city: `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
-            state: '',
-            country: 'GPS Location',
-            source: 'gps',
-            timestamp: Date.now(),
-            isManual: false
-          };
-        }
-        
-        const displayString = `${locationData.city}, ${locationData.state || locationData.country}`;
-        setLocationString(displayString);
-        setIsGPSEnabled(true);
-        setIsLive(true);
-        setLastUpdated(new Date());
-        
-        // Save to localStorage
-        localStorage.setItem('enhanced-location-cache', JSON.stringify(locationData));
-        localStorage.setItem('alertaid-location', JSON.stringify(locationData));
-        
-        console.log('📍 Location updated to:', displayString, locationData);
-        
-        // Broadcast location change event
-        console.log('📡 Broadcasting location-changed event...');
-        window.dispatchEvent(new CustomEvent('location-changed', { detail: locationData }));
-        
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('location-changed', { detail: locationData }));
-        }, 150);
-      } else {
-        throw new Error('Geolocation not supported');
-      }
-    } catch (error) {
-      console.error('Location update failed:', error);
-      setLocationString('Location unavailable');
-      setIsLive(false);
-    } finally {
-      setIsLocationLoading(false);
-    }
-  }, []);
-
-  // Clear all location caches and force fresh GPS location
-  const clearLocationCache = useCallback(() => {
-    console.log('🧹 Clearing all location caches...');
-    localStorage.removeItem('alertaid-location');
-    localStorage.removeItem('enhanced-location-cache');
-    localStorage.removeItem('alertaid-location-prompted');
-    setLocationString('Refreshing...');
-    setIsGPSEnabled(false);
-    setIsLive(false);
-    
-    // Trigger fresh GPS location after clearing
-    setTimeout(() => {
-      updateLocation();
-    }, 100);
-  }, [updateLocation]);
-
-  // Initialize location on mount (but don't auto-refresh - let LocationContext handle it)
-  useEffect(() => {
-    // Only update if we don't have a valid location in localStorage
-    const savedLocation = localStorage.getItem('alertaid-location');
-    if (!savedLocation) {
-      console.log('📍 NavigationBar: No saved location, triggering update');
-      updateLocation();
-    } else {
-      try {
-        const locationData = JSON.parse(savedLocation);
-        const displayString = `${locationData.city}, ${locationData.state || locationData.country}`;
-        setLocationString(displayString);
-        setIsGPSEnabled(locationData.source === 'gps');
-        setIsLive(true);
-        setLastUpdated(new Date(locationData.timestamp || Date.now()));
-        console.log('📍 NavigationBar: Using saved location:', displayString);
-      } catch (e) {
-        console.warn('Failed to parse saved location, fetching fresh');
-        updateLocation();
-      }
-    }
-    
-    // Listen for location changes from other components
-    const handleLocationUpdate = (event: any) => {
-      if (event.detail) {
-        const locationData = event.detail;
-        const displayString = `${locationData.city}, ${locationData.state || locationData.country}`;
-        setLocationString(displayString);
-        setIsGPSEnabled(locationData.source === 'gps');
-        setIsLive(true);
-        setLastUpdated(new Date(locationData.timestamp || Date.now()));
-        console.log('📍 NavigationBar: Received location update:', displayString);
-      }
-    };
-    
-    window.addEventListener('location-changed', handleLocationUpdate);
-    
-    return () => {
-      window.removeEventListener('location-changed', handleLocationUpdate);
-    };
-  }, [updateLocation]);
-
   const handleNavigation = useCallback((pageId: string) => {
     setIsMobileMenuOpen(false);
     onNavigate?.(pageId);
@@ -526,45 +357,18 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   }, []);
 
   const handleManualLocationSelect = useCallback((location: { latitude: number; longitude: number; city?: string; country?: string }) => {
-    // Update location display
-    const displayString = location.city 
-      ? `${location.city}${location.country ? `, ${location.country}` : ''}`
-      : `${location.latitude.toFixed(4)}°, ${location.longitude.toFixed(4)}°`;
-    
-    setLocationString(displayString);
-    setIsGPSEnabled(false); // Manual location, not GPS
-    setIsLive(true);
-    setLastUpdated(new Date());
+    setManualLocation(location);
     setShowManualLocationModal(false);
+  }, [setManualLocation]);
+
+  const locationString = useMemo(() => {
+    if (locationState.loading) return 'Detecting location...';
+    if (locationState.error) return 'Location unavailable';
+    if (!locationState.coordinates) return 'Location unavailable';
     
-    // Save to localStorage for persistence in BOTH locations
-    const locationData = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      city: location.city || 'Custom Location',
-      state: '',
-      country: location.country || '',
-      source: 'manual',
-      timestamp: Date.now(),
-      isManual: true
-    };
-    
-    // Save to both cache locations
-    localStorage.setItem('enhanced-location-cache', JSON.stringify(locationData));
-    localStorage.setItem('alertaid-location', JSON.stringify(locationData));
-    localStorage.setItem('alertaid-location-prompted', 'granted');
-    
-    console.log('📍 Manual location set and saved to localStorage:', locationData);
-    
-    // Dispatch event for ALL components to refresh their data
-    console.log('📡 Broadcasting location-changed event...');
-    window.dispatchEvent(new CustomEvent('location-changed', { detail: locationData }));
-    
-    // Small delay then dispatch again to ensure all listeners catch it
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('location-changed', { detail: locationData }));
-    }, 100);
-  }, []);
+    return locationState.displayString || 
+      `${locationState.coordinates.latitude.toFixed(4)}°, ${locationState.coordinates.longitude.toFixed(4)}°`;
+  }, [locationState]);
 
   return (
     <>
@@ -601,8 +405,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
             <Search />
           </RefreshButton>
           <RefreshButton 
-            onClick={updateLocation}
-            isLoading={isLocationLoading}
+            onClick={refreshLocation}
+            isLoading={locationState.loading}
             title="Refresh location"
           >
             <RefreshCw />

@@ -5,6 +5,7 @@ import { Card, Heading, Text, StatusIndicator, Flex, Button } from '../../styles
 import { useCurrentAlerts } from '../../hooks/useDashboard';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { enhancedSpacing, enhancedShadows } from '../../styles/enhanced-design-system';
+import { ActiveAlert } from '../../services/apiService';
 
 const AlertsContainer = styled(Card)`
   max-height: 320px;
@@ -42,12 +43,14 @@ const AlertItem = styled.div<{ severity: string }>`
   border: 1px solid ${({ theme }) => theme.colors.border.default}; /* Dark border */
   color: ${({ theme }) => theme.colors.text.primary}; /* High-contrast text */
   position: relative;
+  overflow: hidden;
   
   /* Enhanced micro-interactions */
   transition: all 0.2s ease;
   &:hover {
     box-shadow: ${enhancedShadows.xs};
     transform: translateX(2px); /* Subtle slide */
+    background: ${({ theme }) => theme.colors.surface.hover}; /* Subtle dark hover */
   }
   
   /* Red accent stripe for severity - STRATEGIC USE ONLY */
@@ -58,7 +61,6 @@ const AlertItem = styled.div<{ severity: string }>`
     top: 0;
     bottom: 0;
     width: 4px;
-    border-radius: ${({ theme }) => theme.borderRadius.xs} 0 0 ${({ theme }) => theme.borderRadius.xs};
     background: ${({ severity, theme }) => {
       switch (severity) {
         case 'Critical': return theme.colors.primary[600]; /* Vivid red for dark mode */
@@ -67,47 +69,6 @@ const AlertItem = styled.div<{ severity: string }>`
         default: return theme.colors.success[500];         /* Green for low */
       }
     }};
-  }
-  
-  /* Dark mode hover interaction */
-  transition: all 0.2s ease;
-  &:hover {
-    background: ${({ theme }) => theme.colors.surface.hover}; /* Subtle dark hover */
-    transform: translateY(-1px);
-    box-shadow: ${({ theme }) => theme.shadows.subtle};
-  }
-  }};
-  border-left: 4px solid ${({ severity, theme }) => { /* Thicker coral accent */
-    switch (severity) {
-      case 'Critical':
-        return theme.colors.primary[500]; /* Use coral for critical alerts */
-      case 'High':
-        return theme.colors.primary[400]; /* Coral variations */
-      case 'Medium':
-        return theme.colors.info[500];
-      default:
-        return theme.colors.success[500];
-    }
-  }};
-  margin-bottom: ${({ theme }) => theme.spacing[3]};
-  transition: ${({ theme }) => theme.transitions.bounce}; /* Bouncy feel */
-  box-shadow: ${({ theme }) => theme.shadows.sm}; /* Elevated feel */
-  
-  &:hover {
-    background: ${({ severity, theme }) => {
-      switch (severity) {
-        case 'Critical':
-          return `${theme.colors.primary[200]}60`; /* Light coral hover */
-        case 'High':
-          return `${theme.colors.primary[100]}80`; /* Coral hover */
-        case 'Medium':
-          return `${theme.colors.info[200]}60`;
-        default:
-          return `${theme.colors.success[200]}60`;
-      }
-    }};
-    transform: translateY(-2px); /* More lift */
-    box-shadow: ${({ theme }) => theme.shadows.warmGlow}; /* Warm glow on hover */
   }
 `;
 
@@ -168,22 +129,21 @@ interface CurrentAlertsProps {
   // No props needed - data comes from API hook
 }
 
-interface Alert {
-  id: string;
-  severity: string;
-  description: string;
-  areas: string[];
-  onset: string;
-  event?: string;
-  expires?: string;
-}
+
 
 const CurrentAlerts: React.FC<CurrentAlertsProps> = () => {
   const { data: alertsData, loading, error, refetch } = useCurrentAlerts();
   const { addNotification } = useNotifications();
 
   // alertsData is already an array of alerts from useDashboard
-  const displayAlerts: Alert[] = useMemo(() => (alertsData as Alert[]) || [], [alertsData]);
+  const displayAlerts: ActiveAlert[] = useMemo(() => {
+    if (!alertsData) return [];
+    const alertsArray = Array.isArray(alertsData) ? alertsData : [];
+    return alertsArray.filter((alert: ActiveAlert) => {
+      if (!alert.expires) return true;
+      return new Date(alert.expires) > new Date();
+    });
+  }, [alertsData]);
 
   // Convert alerts to notifications
   useEffect(() => {
@@ -291,7 +251,7 @@ const CurrentAlerts: React.FC<CurrentAlertsProps> = () => {
                 <AlertTriangle />
               </AlertIcon>
               <AlertContent>
-                <Text size="sm" weight="medium">{alert.description}</Text>
+                <Text size="sm" weight="medium">{alert.title || alert.description}</Text>
                 <AlertMeta justify="between" align="center">
                   <Flex align="center" gap="4px">
                     <StatusIndicator status={getSeverityStatus(alert.severity)} size="sm" />

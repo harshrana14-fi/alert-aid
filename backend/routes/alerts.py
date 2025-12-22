@@ -4,6 +4,7 @@ Handles alert management and notification systems
 """
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import random
 import math
@@ -14,6 +15,18 @@ router = APIRouter()
 # In-memory alert storage (in production, use database)
 alerts_storage = []
 alert_id_counter = 1
+
+class AlertCreate(BaseModel):
+    type: str = Field(..., description="Type of alert (e.g., flood, fire)")
+    severity: str = Field(..., description="Severity level (low, medium, high, critical)")
+    title: str = Field(..., description="Alert title")
+    description: str = Field(..., description="Detailed description")
+    location: Dict[str, Any] = Field(default_factory=dict, description="Location coordinates")
+    affected_areas: List[str] = Field(default_factory=list, description="List of affected areas")
+    expires_at: Optional[str] = Field(None, description="Expiration timestamp")
+    source: str = Field("alert_aid_system", description="Source of the alert")
+    emergency_contacts: List[Dict[str, str]] = Field(default_factory=list, description="Emergency contacts")
+    recommended_actions: List[str] = Field(default_factory=list, description="Recommended actions")
 
 @router.get("/alerts")
 async def get_all_alerts(active_only: bool = False, severity: Optional[str] = None):
@@ -44,35 +57,26 @@ async def get_all_alerts(active_only: bool = False, severity: Optional[str] = No
         raise HTTPException(status_code=500, detail=f"Alerts retrieval error: {str(e)}")
 
 @router.post("/alerts")
-async def create_alert(alert_data: Dict[str, Any]):
+async def create_alert(alert_data: AlertCreate):
     """Create a new alert"""
     try:
         global alert_id_counter
         
-        # Validate required fields
-        required_fields = ["type", "severity", "title", "description"]
-        for field in required_fields:
-            if field not in alert_data:
-                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
-        
         # Create alert
         new_alert = {
             "id": alert_id_counter,
-            "type": alert_data["type"],
-            "severity": alert_data["severity"],
-            "title": alert_data["title"],
-            "description": alert_data["description"],
-            "location": alert_data.get("location", {}),
-            "affected_areas": alert_data.get("affected_areas", []),
+            "type": alert_data.type,
+            "severity": alert_data.severity,
+            "title": alert_data.title,
+            "description": alert_data.description,
+            "location": alert_data.location,
+            "affected_areas": alert_data.affected_areas,
             "created_at": datetime.now().isoformat(),
-            "expires_at": alert_data.get(
-                "expires_at", 
-                (datetime.now() + timedelta(hours=24)).isoformat()
-            ),
+            "expires_at": alert_data.expires_at or (datetime.now() + timedelta(hours=24)).isoformat(),
             "status": "active",
-            "source": alert_data.get("source", "alert_aid_system"),
-            "emergency_contacts": alert_data.get("emergency_contacts", []),
-            "recommended_actions": alert_data.get("recommended_actions", [])
+            "source": alert_data.source,
+            "emergency_contacts": alert_data.emergency_contacts,
+            "recommended_actions": alert_data.recommended_actions
         }
         
         alerts_storage.append(new_alert)

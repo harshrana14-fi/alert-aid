@@ -4,27 +4,36 @@ Handles disaster prediction using enhanced ML models
 """
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 import random
 import math
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 router = APIRouter()
 
+class PredictionInput(BaseModel):
+    temperature: float = Field(..., description="Temperature in Celsius")
+    humidity: float = Field(..., description="Humidity percentage (0-100)")
+    wind_speed: float = Field(..., description="Wind speed in km/h")
+    pressure: float = Field(..., description="Atmospheric pressure in hPa")
+    latitude: float = Field(..., description="Latitude coordinate")
+    longitude: float = Field(..., description="Longitude coordinate")
+
 @router.post("/predict/disaster")
-async def predict_disaster(data: Dict[str, Any]):
+async def predict_disaster(data: PredictionInput):
     """
     Enhanced disaster prediction using multiple factors
     Accepts: temperature, humidity, wind_speed, pressure, location data
     """
     try:
         # Extract prediction inputs
-        temperature = data.get("temperature", 20)
-        humidity = data.get("humidity", 50)
-        wind_speed = data.get("wind_speed", 5)
-        pressure = data.get("pressure", 1013)
-        latitude = data.get("latitude", 0)
-        longitude = data.get("longitude", 0)
+        temperature = data.temperature
+        humidity = data.humidity
+        wind_speed = data.wind_speed
+        pressure = data.pressure
+        latitude = data.latitude
+        longitude = data.longitude
         
         # Enhanced prediction algorithm
         predictions = _enhanced_disaster_prediction(

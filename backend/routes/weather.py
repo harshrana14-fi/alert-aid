@@ -4,7 +4,8 @@ Handles weather data fetching from OpenWeatherMap and other sources
 """
 
 from fastapi import APIRouter, HTTPException
-import requests
+import aiohttp
+import asyncio
 from datetime import datetime, timedelta
 import os
 import random
@@ -39,32 +40,30 @@ async def get_weather_data(lat: float, lon: float):
                 "units": "metric"
             }
             
-            response = requests.get(url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "temperature": data["main"]["temp"],
-                    "conditions": data["weather"][0]["description"].title(),
-                    "humidity": data["main"]["humidity"],
-                    "wind_speed": data["wind"].get("speed", 0),
-                    "pressure": data["main"]["pressure"],
-                    "visibility": data.get("visibility", 10000) / 1000,  # Convert to km
-                    "last_updated": datetime.now().isoformat(),
-                    "source": "OpenWeatherMap"
-                }
-            else:
-                raise requests.RequestException(f"API returned {response.status_code}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "temperature": data["main"]["temp"],
+                            "conditions": data["weather"][0]["description"].title(),
+                            "humidity": data["main"]["humidity"],
+                            "wind_speed": data["wind"].get("speed", 0),
+                            "pressure": data["main"]["pressure"],
+                            "visibility": data.get("visibility", 10000) / 1000,  # Convert to km
+                            "last_updated": datetime.now().isoformat(),
+                            "source": "OpenWeatherMap"
+                        }
+                    else:
+                        raise Exception(f"API returned {response.status}")
         
         else:
             # Generate realistic fallback weather data
             return _generate_realistic_weather(lat, lon)
             
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Weather API error: {e}")
         return _generate_realistic_weather(lat, lon)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Weather service error: {str(e)}")
 
 def _generate_realistic_weather(lat: float, lon: float):
     """Generate realistic weather data based on location and season"""

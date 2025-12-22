@@ -108,7 +108,17 @@ class BackendConnectivityService {
   }
 
   private async testIndividualEndpoints(diagnostics: ConnectivityDiagnostics): Promise<void> {
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+    const getApiBaseUrl = (): string => {
+      const envUrl = process.env.REACT_APP_API_URL;
+      if (envUrl && envUrl.trim() !== '') {
+        return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+      }
+      if (process.env.NODE_ENV === 'production') {
+        return ''; // Same origin for Vercel
+      }
+      return 'http://127.0.0.1:8000';
+    };
+    const baseUrl = getApiBaseUrl();
     // Use test coordinates for endpoints that require parameters
     const testLat = 26.8413685;
     const testLon = 75.562645;
@@ -210,7 +220,7 @@ class BackendConnectivityService {
     if (diagnostics.backend.reachable) {
       healthyServices++;
     } else {
-      recommendations.push('Backend API server appears to be offline. Check if the Alert Aid backend service is running on port 8001.');
+      recommendations.push('Backend API server appears to be offline. Check if the Alert Aid backend service is running on port 8000.');
     }
 
     // Assess endpoint availability

@@ -33,6 +33,8 @@ import RiskCalculationService, { WeatherRiskFactors } from '../../services/riskC
 import logger from '../../utils/logger';
 import GlobeRiskHero from './GlobeRiskHero';
 import { ForecastData } from '../../types';
+import ErrorBoundary from '../common/ErrorBoundary';
+import { useCurrentAlerts } from '../../hooks/useDashboard';
 
 // Alert risk severity weights for risk calculation
 const SEVERITY_WEIGHTS = {
@@ -319,24 +321,19 @@ const Dashboard: React.FC = () => {
   const [globalRiskScore, setGlobalRiskScore] = useState<number>(0);
   const [isCalculatingRisk, setIsCalculatingRisk] = useState(true);
   const [forecastData, setForecastData] = useState<ForecastData[] | null>(null);
+  const [forecastError, setForecastError] = useState<boolean>(false);
   const [aqiData, setAqiData] = useState<AQIData | null>(null);
   const [aqiLoading, setAqiLoading] = useState(false);
+  const [aqiError, setAqiError] = useState<boolean>(false);
   
+  const { data: alerts } = useCurrentAlerts();
   const { refreshInterval, autoRefreshEnabled } = useRefreshSettings();
-  const { lastRefresh, nextRefresh, isRefreshing, manualRefresh } = useAutoRefresh({
-    interval: Math.max(refreshInterval, 5), // Minimum 5 minutes to prevent excessive API calls
-    enabled: autoRefreshEnabled,
-    onRefresh: () => {
-      logger.log('🔄 Dashboard data refreshed via auto-refresh');
-      calculateGlobalRisk(); // Recalculate risk on refresh
-    }
-  });
-  
   const { exportBothFormats, hasData } = useLiveDataExport();
 
   // Fetch 7-day forecast data
   const fetchForecastData = useCallback(async () => {
     try {
+      setForecastError(false);
       const loc = await enhancedLocationService.getCurrentLocation();
       const forecast = await WeatherForecastService.getForecast(loc.latitude, loc.longitude, 7);
       
@@ -352,6 +349,7 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       logger.error('❌ Forecast fetch failed:', error);
       setForecastData(null);
+      setForecastError(true);
     }
   }, []);
 
@@ -359,6 +357,7 @@ const Dashboard: React.FC = () => {
   const fetchAQIData = useCallback(async () => {
     try {
       setAqiLoading(true);
+      setAqiError(false);
       const loc = await enhancedLocationService.getCurrentLocation();
       const aqi = await airQualityService.getAirQuality(loc.latitude, loc.longitude);
       
@@ -373,6 +372,7 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       logger.error('❌ AQI fetch failed:', error);
       setAqiData(null);
+      setAqiError(true);
     } finally {
       setAqiLoading(false);
     }
@@ -402,8 +402,7 @@ const Dashboard: React.FC = () => {
       const weatherRisk = RiskCalculationService.calculateWeatherRisk(weatherFactors);
       
       // Calculate alert risk from current alerts
-      // TODO: Implement actual alerts state management
-      const alertRisk = calculateAlertRisk([]);
+      const alertRisk = calculateAlertRisk(alerts || []);
       
       // Get pollution risk factor (0-1) and convert to 0-10 scale
       const pollutionRisk = aqiData 
@@ -428,17 +427,28 @@ const Dashboard: React.FC = () => {
     } finally {
       setIsCalculatingRisk(false);
     }
-  }, [aqiData]);
+  }, [aqiData, alerts]);
 
-  // Load dashboard data on mount and set up refresh interval
+  // Unified refresh function
+  const refreshAllData = useCallback(async () => {
+    logger.log('🔄 Refreshing all dashboard data...');
+    await Promise.all([
+      fetchForecastData(),
+      fetchAQIData(),
+      calculateGlobalRisk()
+    ]);
+  }, [fetchForecastData, fetchAQIData, calculateGlobalRisk]);
+
+  const { lastRefresh, nextRefresh, isRefreshing, manualRefresh } = useAutoRefresh({
+    interval: Math.max(refreshInterval, 5), // Minimum 5 minutes to prevent excessive API calls
+    enabled: autoRefreshEnabled,
+    onRefresh: refreshAllData
+  });
+
+  // Load dashboard data on mount
   useEffect(() => {
     const loadDashboard = async () => {
-      // Fetch all data in parallel
-      await Promise.all([
-        fetchForecastData(),
-        fetchAQIData(),
-        calculateGlobalRisk()
-      ]);
+      await refreshAllData();
       
       // Simulate component initialization
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -451,23 +461,15 @@ const Dashboard: React.FC = () => {
     };
 
     loadDashboard();
-    
-    // Set up periodic refresh every 5 minutes
-    const refreshInterval = setInterval(() => {
-      fetchForecastData();
-      fetchAQIData();
-      calculateGlobalRisk();
-    }, 5 * 60 * 1000); // 5 minutes
-    
-    return () => clearInterval(refreshInterval);
+    // Note: Periodic refresh is now handled entirely by useAutoRefresh hook
   }, []); // Run only once on mount
 
-  // Recalculate risk when AQI data changes (but don't fetch AQI again)
+  // Recalculate risk when AQI data or Alerts change (but don't fetch AQI again)
   useEffect(() => {
-    if (aqiData && dashboardLoaded) {
+    if ((aqiData || alerts) && dashboardLoaded) {
       calculateGlobalRisk();
     }
-  }, [aqiData, dashboardLoaded, calculateGlobalRisk]);
+  }, [aqiData, alerts, dashboardLoaded, calculateGlobalRisk]);
 
   // Memoize time formatting to prevent excessive re-renders
   const formatTimeUntilNextRefresh = useCallback((nextRefresh: Date | null) => {
@@ -555,81 +557,119 @@ const Dashboard: React.FC = () => {
         {/* Left Sidebar - Alerts & Controls */}
         <LeftSidebar>
           <DashboardCard animationDelay={100}>
-            <CurrentAlerts />
+            <ErrorBoundary componentName="Current Alerts">
+              <CurrentAlerts />
+            </ErrorBoundary>
           </DashboardCard>
           
           <DashboardCard animationDelay={200}>
-            <MLPredictionAccuracy />
+            <ErrorBoundary componentName="ML Prediction">
+              <MLPredictionAccuracy />
+            </ErrorBoundary>
           </DashboardCard>
           
           <DashboardCard animationDelay={300}>
-            <ActionButtons 
-              onDownloadReport={handleDownloadReport}
-              onRefreshData={handleRefreshData}
-            />
+            <ErrorBoundary componentName="Action Buttons">
+              <ActionButtons 
+                onDownloadReport={handleDownloadReport}
+                onRefreshData={handleRefreshData}
+              />
+            </ErrorBoundary>
           </DashboardCard>
         </LeftSidebar>
 
         {/* Center Area - Merged Globe + Risk Hero */}
         <CenterArea>
-          <Suspense fallback={<LoadingOverlay message="Loading Globe..." />}>
-            <GlobeRiskHero 
-              score={globalRiskScore} 
-              isCalculating={isCalculatingRisk}
-              alerts={[]}
-            />
-          </Suspense>
+          <ErrorBoundary componentName="Globe Visualization">
+            <Suspense fallback={<LoadingOverlay message="Loading Globe..." />}>
+              <GlobeRiskHero 
+                score={globalRiskScore} 
+                isCalculating={isCalculatingRisk}
+                alerts={alerts || []}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </CenterArea>
 
         {/* Right Sidebar - Forecast & Trends */}
         <RightSidebar>
           <DashboardCard animationDelay={250}>
-            <SevenDayForecast forecast={forecastData || undefined} />
+            <ErrorBoundary componentName="Weather Forecast">
+              {forecastError ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#ff6b6b' }}>
+                  Unable to load forecast data. Please try again later.
+                </div>
+              ) : (
+                <SevenDayForecast forecast={forecastData || undefined} />
+              )}
+            </ErrorBoundary>
           </DashboardCard>
           
           <DashboardCard animationDelay={350}>
-            <HistoricalTrends />
+            <ErrorBoundary componentName="Historical Trends">
+              <HistoricalTrends />
+            </ErrorBoundary>
           </DashboardCard>
         </RightSidebar>
 
         {/* Weather Dashboard - Full Width with Enhanced Widget */}
         <WeatherSection>
-          <EnhancedWeatherWidget />
-          <AirQualityWidget aqiData={aqiData} loading={aqiLoading} />
+          <ErrorBoundary componentName="Weather Widget">
+            <EnhancedWeatherWidget />
+          </ErrorBoundary>
+          <ErrorBoundary componentName="Air Quality Widget">
+            {aqiError ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#ff6b6b', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', marginTop: '16px' }}>
+                Unable to load air quality data.
+              </div>
+            ) : (
+              <AirQualityWidget aqiData={aqiData} loading={aqiLoading} />
+            )}
+          </ErrorBoundary>
         </WeatherSection>
 
         {/* System Diagnostics - Full Width */}
         <DiagnosticsSection>
           <DashboardCard animationDelay={375}>
-            <SystemDiagnostics />
+            <ErrorBoundary componentName="System Diagnostics">
+              <SystemDiagnostics />
+            </ErrorBoundary>
           </DashboardCard>
         </DiagnosticsSection>
 
         {/* Emergency Response - Full Width */}
         <EmergencySection>
           <DashboardCard animationDelay={400}>
-            <EmergencyResponsePanel />
+            <ErrorBoundary componentName="Emergency Response">
+              <EmergencyResponsePanel />
+            </ErrorBoundary>
           </DashboardCard>
         </EmergencySection>
 
         {/* Evacuation & Safety */}
         <EvacuationSection>
           <DashboardCard animationDelay={450}>
-            <EvacuationSafetyModule />
+            <ErrorBoundary componentName="Evacuation Safety">
+              <EvacuationSafetyModule />
+            </ErrorBoundary>
           </DashboardCard>
         </EvacuationSection>
 
         {/* Resource Management */}
         <ResourcesSection>
           <DashboardCard animationDelay={500}>
-            <ResourceManagementDashboard />
+            <ErrorBoundary componentName="Resource Management">
+              <ResourceManagementDashboard />
+            </ErrorBoundary>
           </DashboardCard>
         </ResourcesSection>
 
         {/* Communication Hub */}
         <CommunicationSection>
           <DashboardCard animationDelay={550}>
-            <CommunicationHub />
+            <ErrorBoundary componentName="Communication Hub">
+              <CommunicationHub />
+            </ErrorBoundary>
           </DashboardCard>
         </CommunicationSection>
       </DashboardGrid>

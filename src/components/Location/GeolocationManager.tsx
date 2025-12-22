@@ -7,6 +7,20 @@ import { LocationData } from './types';
 // LocationData interface now imported from types.ts
 
 interface GeolocationContextType {
+  // New Interface
+  locationState: {
+    coordinates: LocationData | null;
+    loading: boolean;
+    error: string | null;
+    displayString: string | null;
+  };
+  refreshLocation: () => void;
+  setManualLocation: (location: { latitude: number; longitude: number; city?: string; country?: string }) => void;
+  isLive: boolean;
+  isGPSEnabled: boolean;
+  lastUpdated: Date;
+  
+  // Shared / Old Interface
   location: LocationData | null;
   isLoading: boolean;
   error: string | null;
@@ -31,7 +45,7 @@ interface GeolocationProviderProps {
 
 export const GeolocationProvider: React.FC<GeolocationProviderProps> = ({ children }) => {
   const [location, setLocation] = useState<LocationData | null>(null);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
@@ -100,18 +114,21 @@ export const GeolocationProvider: React.FC<GeolocationProviderProps> = ({ childr
   }, []);
 
   const requestLocation = useCallback(() => {
+    setIsLoading(true);
     setShowPermissionModal(true);
   }, []);
 
   const handleLocationGranted = useCallback((locationData: LocationData) => {
     console.log('📍 GeolocationManager: Location granted', locationData);
     setLocation(locationData);
+    setIsLoading(false);
     setShowPermissionModal(false);
     setShowManualInput(false);
     setError(null);
     
     // Mark that user has been prompted
     localStorage.setItem('alertaid-location-prompted', 'true');
+    localStorage.setItem('alertaid-location', JSON.stringify(locationData));
     
     // Broadcast location change event
     window.dispatchEvent(new CustomEvent('location-changed', { detail: locationData }));
@@ -126,6 +143,7 @@ export const GeolocationProvider: React.FC<GeolocationProviderProps> = ({ childr
   }, [addNotification]);
 
   const handleLocationDenied = useCallback(() => {
+    setIsLoading(false);
     setShowPermissionModal(false);
     setError('Location access denied');
     
@@ -161,7 +179,34 @@ export const GeolocationProvider: React.FC<GeolocationProviderProps> = ({ childr
     localStorage.removeItem('alertaid-location-prompted');
   }, []);
 
+  const setManualLocation = useCallback((loc: { latitude: number; longitude: number; city?: string; country?: string }) => {
+    const newLoc: LocationData = {
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      city: loc.city || 'Unknown',
+      state: '',
+      country: loc.country || 'Unknown',
+      timestamp: Date.now(),
+      isManual: true
+    };
+    handleLocationGranted(newLoc);
+  }, [handleLocationGranted]);
+
   const contextValue: GeolocationContextType = {
+    // New Interface
+    locationState: {
+      coordinates: location,
+      loading: isLoading,
+      error: error,
+      displayString: location ? `${location.city}, ${location.state}` : null
+    },
+    refreshLocation: requestLocation,
+    setManualLocation,
+    isLive: !!location,
+    isGPSEnabled: location ? !location.isManual : false,
+    lastUpdated: location ? new Date(location.timestamp) : new Date(),
+    
+    // Shared / Old Interface
     location,
     isLoading,
     error,

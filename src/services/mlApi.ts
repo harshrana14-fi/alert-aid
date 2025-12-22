@@ -77,18 +77,26 @@ export interface ModelPerformanceMetrics {
 }
 
 // API Configuration
+const getApiBaseUrl = (): string => {
+  const envUrl = process.env.REACT_APP_ML_API_URL || process.env.REACT_APP_API_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return ''; // Same origin for Vercel
+  }
+  return 'http://127.0.0.1:8000';
+};
+
 const API_CONFIG = {
-  // Default to the local ML backend used by the project during development
-  baseUrl: process.env.REACT_APP_ML_API_URL || 'http://127.0.0.1:8000',
+  baseUrl: getApiBaseUrl(),
   endpoints: {
-    // Align endpoints to the FastAPI backend implemented in backend/enhanced_main.py
-    predict: '/predict/disaster-risk',
-    realTimeAlerts: '/alerts/stream',
-    modelMetrics: '/model/performance',
-    historicalData: '/data/historical',
-    // Backend exposes weather and earthquake endpoints using lat/lon path params
-    sensorData: '/weather',
-    healthCheck: '/health'
+    predict: '/api/predict/disaster-risk',
+    realTimeAlerts: '/api/alerts/stream',
+    modelMetrics: '/api/model/performance',
+    historicalData: '/api/data/historical',
+    sensorData: '/api/weather',
+    healthCheck: '/api/health'
   },
   headers: {
     'Content-Type': 'application/json',

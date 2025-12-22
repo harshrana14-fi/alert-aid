@@ -8,7 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { MapPin, AlertCircle, Navigation } from 'lucide-react';
 import { enhancedSpacing } from '../../styles/enhanced-design-system';
-import { LocationPermissionModalProps, ReverseGeocodeResponse } from './types';
+import { LocationPermissionModalProps } from './types';
 import { ExternalAPIService } from '../../services/externalAPIs';
 
 // Animation keyframes (for future use)

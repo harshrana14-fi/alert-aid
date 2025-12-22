@@ -326,6 +326,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTa
   const [success, setSuccess] = useState(false);
   const [allergyInput, setAllergyInput] = useState('');
   const [medicationInput, setMedicationInput] = useState('');
+  
+  const isMounted = React.useRef(true);
+
+  React.useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -337,15 +345,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTa
     try {
       if (activeTab === 'login') {
         await login(formData.email, formData.password);
-        setSuccess(true);
-        setTimeout(() => onClose(), 1500);
+        if (isMounted.current) {
+          setSuccess(true);
+          setTimeout(() => {
+            if (isMounted.current) onClose();
+          }, 1500);
+        }
       } else {
         await register(formData);
-        setSuccess(true);
-        setTimeout(() => onClose(), 1500);
+        if (isMounted.current) {
+          setSuccess(true);
+          setTimeout(() => {
+            if (isMounted.current) onClose();
+          }, 1500);
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      if (isMounted.current) {
+        setError(err.message || 'An error occurred');
+      }
     }
   };
 

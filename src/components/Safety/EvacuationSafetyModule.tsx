@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Card, Button } from '../../styles/components';
+import { useGeolocation } from '../Location/GeolocationManager';
 
 // Types for evacuation system
 interface EvacuationRoute {
@@ -285,7 +286,8 @@ const PriorityBadge = styled.span<{ priority: string }>`
 // Main component
 const EvacuationSafetyModule: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'routes' | 'shelters' | 'safety'>('routes');
-  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const { locationState } = useGeolocation();
+  const userLocation = locationState.coordinates ? { lat: locationState.coordinates.latitude, lon: locationState.coordinates.longitude } : null;
   
   // Mock data - in production, fetch from APIs
   const [evacuationRoutes] = useState<EvacuationRoute[]>([
@@ -407,20 +409,7 @@ const EvacuationSafetyModule: React.FC = () => {
     }
   ]);
 
-  // Get current location
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
-          });
-        },
-        (error) => console.log('Location access denied')
-      );
-    }
-  }, []);
+  // Get current location - handled by useGeolocation hook
 
   // Navigate to route
   const navigateToRoute = (route: EvacuationRoute) => {

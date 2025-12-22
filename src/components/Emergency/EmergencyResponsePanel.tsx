@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { Card, Button } from '../../styles/components';
 
@@ -236,8 +236,11 @@ const EmergencyResponsePanel: React.FC = () => {
 
   const [status, setStatus] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
 
-  // Execute SOS actions - defined before useEffect to avoid hoisting issues
-  const executeSOS = async () => {
+  // Execute SOS actions - wrapped in useCallback to prevent infinite loops
+  const executeSOS = useCallback(async () => {
+    // Prevent multiple executions
+    if (sosState.locationSent) return;
+
     try {
       setStatus({ message: 'Executing emergency protocol...', type: 'warning' });
       
@@ -265,9 +268,10 @@ const EmergencyResponsePanel: React.FC = () => {
         }, 1000); // Small delay to let location send first
       }
       
-      // Update state with success
+      // Update state with success and STOP the SOS active state to prevent loops
       setSosState(prev => ({ 
         ...prev, 
+        isActive: false, // Stop the active state
         locationSent: true, 
         contactsNotified: emergencyContacts.map(c => c.id) 
       }));
@@ -284,12 +288,10 @@ const EmergencyResponsePanel: React.FC = () => {
       
       // Keep success message visible longer
       setTimeout(() => {
-        if (sosState.isActive) {
-          setStatus({ 
-            message: 'Emergency active. Help is on the way. Stay calm and safe.', 
-            type: 'info' 
-          });
-        }
+        setStatus({ 
+          message: 'Emergency active. Help is on the way. Stay calm and safe.', 
+          type: 'info' 
+        });
       }, 5000);
       
     } catch (error) {
@@ -305,8 +307,11 @@ const EmergencyResponsePanel: React.FC = () => {
         message: '⚠️ SOS partially sent. Location failed but calling emergency services. Please provide location verbally.', 
         type: 'error' 
       });
+      
+      // Stop active state even on error to prevent loops
+      setSosState(prev => ({ ...prev, isActive: false }));
     }
-  };
+  }, [emergencyContacts, medicalInfo, sosState.locationSent]);
 
   // SOS countdown timer
   useEffect(() => {

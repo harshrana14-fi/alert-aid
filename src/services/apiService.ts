@@ -8,9 +8,27 @@ import {
 } from '../types/weather';
 
 // API Configuration - Production ready with environment variable support
-const rawApiUrl = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
-const API_BASE_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
-const API_PREFIX = '/api'; // All our endpoints start with /api
+// In production (Vercel), API is on the same domain under /api
+// In development, API is on localhost:8000
+const getApiBaseUrl = (): string => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  
+  // If env URL is set and not empty, use it
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }
+  
+  // In production, API is on the same origin
+  if (process.env.NODE_ENV === 'production') {
+    return ''; // Same origin, API at /api/*
+  }
+  
+  // Development default
+  return 'http://127.0.0.1:8000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+const API_PREFIX = '/api'; // Backend routes are at /api/*
 const API_TIMEOUT = 15000; // 15 seconds for ML operations
 
 console.log('🔧 API Configuration:', { 
@@ -94,7 +112,9 @@ async function apiRequest<T>(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    // Remove API_PREFIX since backend routes are at root
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',

@@ -4,7 +4,6 @@
  */
 
 const OPENWEATHER_API_KEY = '1801423b3942e324ab80f5b47afe0859';
-const ONE_CALL_API_URL = 'https://api.openweathermap.org/data/3.0/onecall';
 const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
 export interface SimpleWeatherData {

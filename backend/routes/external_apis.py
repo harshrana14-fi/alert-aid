@@ -4,7 +4,8 @@ Handles integration with USGS earthquake data and other external sources
 """
 
 from fastapi import APIRouter, HTTPException
-import requests
+import aiohttp
+import asyncio
 from datetime import datetime, timedelta
 import random
 from typing import Dict, List, Any, Optional
@@ -58,23 +59,23 @@ async def get_earthquake_data(
         
         # Attempt to get real data from USGS
         try:
-            response = requests.get(USGS_EARTHQUAKE_URL, params=params, timeout=TIMEOUT)
-            
-            if response.status_code == 200:
-                data = response.json()
-                earthquakes = _process_usgs_data(data)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(USGS_EARTHQUAKE_URL, params=params, timeout=TIMEOUT) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        earthquakes = _process_usgs_data(data)
+                        
+                        return {
+                            "earthquakes": earthquakes,
+                            "total_count": len(earthquakes),
+                            "source": "USGS",
+                            "query_parameters": params,
+                            "last_updated": datetime.now().isoformat()
+                        }
+                    else:
+                        raise Exception(f"USGS API returned {response.status}")
                 
-                return {
-                    "earthquakes": earthquakes,
-                    "total_count": len(earthquakes),
-                    "source": "USGS",
-                    "query_parameters": params,
-                    "last_updated": datetime.now().isoformat()
-                }
-            else:
-                raise requests.RequestException(f"USGS API returned {response.status_code}")
-                
-        except requests.RequestException as e:
+        except Exception as e:
             print(f"USGS API error: {e}")
             # Fall back to realistic simulated data
             return _generate_earthquake_simulation(min_magnitude, days, lat, lon, radius_km)

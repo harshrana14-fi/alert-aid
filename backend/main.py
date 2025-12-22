@@ -21,29 +21,26 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.requests import RequestsIntegration
+# from sentry_sdk.integrations.requests import RequestsIntegration
 
 # Initialize Sentry
+SENTRY_DSN = os.getenv("SENTRY_DSN", "https://74e92ef112fbc3aed76dd4f0169c70f8@o4510520744673280.ingest.us.sentry.io/4510549672853504")
+
 sentry_logging = LoggingIntegration(
     level=logging.INFO,        # Capture info and above as breadcrumbs
     event_level=logging.INFO   # Send INFO and above as events (Logs)
 )
 
 sentry_sdk.init(
-    dsn=os.getenv("SENTRY_DSN"),
+    dsn=SENTRY_DSN,
     release="alert-aid-backend@1.0.0",
-    environment="production",
+    environment=os.getenv("ENVIRONMENT", "development"),
     integrations=[
         sentry_logging,
-        RequestsIntegration(),
     ],
     traces_sample_rate=1.0,
     profiles_sample_rate=1.0,
     enable_tracing=True,
-    # Enable metrics
-    _experiments={
-        "metrics_aggregator": True,
-    },
 )
 
 # Import route modules
@@ -62,6 +59,15 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Global exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "detail": str(exc)},
+    )
 
 # Middleware for Sentry Profiling
 @app.middleware("http")
