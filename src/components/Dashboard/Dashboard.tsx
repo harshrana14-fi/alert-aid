@@ -328,8 +328,6 @@ const Dashboard: React.FC = () => {
   const [aqiData, setAqiData] = useState<AQIData | null>(null);
   const [aqiLoading, setAqiLoading] = useState(false);
   
-  // Get location for hazard panels
-  const { currentLocation } = useLocation();
   const [aqiError, setAqiError] = useState<boolean>(false);
   
   // Ref for emergency section scroll

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { AlertTriangle, TrendingUp, Activity, BarChart3, MapPin, Brain, Cpu, Zap, Shield, History, Clock } from 'lucide-react';
+import { TrendingUp, BarChart3, MapPin, Brain, Cpu, Zap, Shield, History, Clock } from 'lucide-react';
 import { productionColors, productionCard } from '../styles/production-ui-system';
 import UnifiedAIMLPanel from '../components/Dashboard/UnifiedAIMLPanel';
 import LeafletFloodMap from '../components/Map/LeafletFloodMap';
@@ -10,7 +10,7 @@ import RiskTrendChart from '../components/Dashboard/RiskTrendChart';
 import EmergencySOS from '../components/Emergency/EmergencySOS';
 import EvacuationRoute from '../components/Emergency/EvacuationRoute';
 import { useLocation } from '../contexts/LocationContext';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 // Enhanced Animations
 const fadeInUp = keyframes`

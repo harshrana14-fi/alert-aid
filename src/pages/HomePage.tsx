@@ -456,12 +456,10 @@ const HomePage: React.FC = () => {
   const [location, setLocation] = useState<string>('Loading...');
   const [riskLevel, setRiskLevel] = useState<'low' | 'moderate' | 'high' | 'critical'>('low');
   const [riskScore, setRiskScore] = useState<number>(2.4);
-  const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Fetch live data from real APIs
   const fetchLiveData = useCallback(async () => {
-    setIsLoading(true);
     try {
       const loc = await enhancedLocationService.getCurrentLocation();
       setLocation(`${loc.city || 'Unknown'}, ${loc.country || ''}`);
