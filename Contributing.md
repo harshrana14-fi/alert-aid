@@ -1,6 +1,6 @@
 ### Contributing Guidelines
 ---
-Thank you for your interest in contributing to **Anshiii-01**
+Thank you for your interest in contributing to **Alert-Aid**
 
 This project exists to make coding feel clearer, less frustrating, and more collaborative. Every contribution, big or small, helps move us closer to that goal.
 
@@ -36,8 +36,9 @@ If you’re unsure where to start, check the Issues tab for:
 **2️⃣ Clone Your Fork**
 
 ```bash
-git clone https://github.com/user-name/alert-aid.git
-cd repository-name
+git clone https://github.com/<your-username>/alert-aid.git
+cd alert-aid
+
 ```
 
 **3️⃣ 🌱 Creating a Branch**
@@ -81,7 +82,7 @@ git push origin feature/your-feature-name
 
 🤝 Code of Conduct
 
-By contributing, you agree to follow the project’s Code of Conduct.
+By contributing, you agree to follow the project’s [Code Of Conduct](CODE_OF_CONDUCT.md).
 Be respectful, inclusive, and constructive in all discussions.
 
 💡 Need Help?
