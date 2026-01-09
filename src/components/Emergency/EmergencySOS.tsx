@@ -1,11 +1,14 @@
 /**
  * EmergencySOS - One-Click Emergency Alert System
- * Critical feature for disaster response applications
+ * Enhanced with loading indicator for emergency actions (Issue #71)
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { productionColors } from '../../styles/production-ui-system';
+import alertNotificationService from '../../services/alertNotificationService';
+
+/* ===================== TYPES ===================== */
 
 interface EmergencyContact {
   id: string;
@@ -35,35 +38,12 @@ interface SOSData {
   message: string;
 }
 
-/* =========================
-   Animations
-========================= */
+/* ===================== ANIMATIONS ===================== */
 
 const pulse = keyframes`
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-`;
-
-const ripple = keyframes`
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
-`;
-
-const shake = keyframes`
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-`;
-
-const breathe = keyframes`
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-`;
-
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,.7); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239,68,68,0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
 `;
 
 const spin = keyframes`
@@ -71,20 +51,17 @@ const spin = keyframes`
   to { transform: rotate(360deg); }
 `;
 
-/* =========================
-   Styled Components
-========================= */
+/* ===================== STYLES ===================== */
 
 const Container = styled.div`
-  background: linear-gradient(135deg,
-    rgba(239, 68, 68, 0.1) 0%,
-    ${productionColors.background.secondary} 100%
+  background: linear-gradient(
+    135deg,
+    rgba(239,68,68,.1),
+    ${productionColors.background.secondary}
   );
-  border: 2px solid rgba(239, 68, 68, 0.3);
+  border: 2px solid rgba(239,68,68,.3);
   border-radius: 20px;
   padding: 24px;
-  position: relative;
-  overflow: hidden;
 `;
 
 const Header = styled.div`
@@ -93,255 +70,162 @@ const Header = styled.div`
 `;
 
 const Title = styled.h2`
-  font-size: 24px;
-  font-weight: 700;
   color: ${productionColors.brand.primary};
-  margin: 0 0 8px 0;
+  margin-bottom: 6px;
 `;
 
 const Subtitle = styled.p`
   color: ${productionColors.text.secondary};
-  font-size: 14px;
-  margin: 0;
+  font-size: 13px;
 `;
 
-const SOSButtonContainer = styled.div`
+const ButtonWrapper = styled.div`
   display: flex;
   justify-content: center;
-  margin: 32px 0;
+  margin: 30px 0;
 `;
 
-const SOSButtonOuter = styled.div<{ $active: boolean }>`
-  position: relative;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  ${({ $active }) =>
-    $active &&
-    css`
-      &::before,
-      &::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        border: 3px solid rgba(239, 68, 68, 0.5);
-        animation: ${ripple} 1.5s infinite;
-      }
-
-      &::after {
-        animation-delay: 0.75s;
-      }
-    `}
-`;
-
-const SOSButton = styled.button<{ $holding: boolean; $countdown: number }>`
+const SOSButton = styled.button`
   width: 160px;
   height: 160px;
   border-radius: 50%;
   border: none;
   background: linear-gradient(
     145deg,
-    ${productionColors.brand.primary} 0%,
-    #dc2626 100%
+    ${productionColors.brand.primary},
+    #dc2626
   );
-  color: white;
+  color: #fff;
   font-size: 28px;
   font-weight: 800;
   cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-
-  ${({ $holding }) => !$holding && css`animation: ${pulse} 2s infinite;`}
-  ${({ $holding }) => $holding && css`animation: ${breathe} 0.5s infinite;`}
+  animation: ${pulse} 2s infinite;
+  transition: all 0.2s ease;
 
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
     animation: none;
   }
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: ${({ $countdown }) => ($countdown / 3) * 100}%;
-    background: rgba(255, 255, 255, 0.3);
-  }
-`;
-
-const SOSText = styled.span`
-  position: relative;
-  z-index: 1;
-`;
-
-const CountdownOverlay = styled.div<{ $show: boolean }>`
-  position: absolute;
-  font-size: 48px;
-  font-weight: 800;
-  color: white;
-  opacity: ${({ $show }) => ($show ? 1 : 0)};
-  transition: opacity 0.2s ease;
 `;
 
 const InstructionText = styled.p`
   text-align: center;
-  color: ${productionColors.text.tertiary};
-  font-size: 12px;
-  margin-top: 16px;
+  font-size: 13px;
+  margin-top: 12px;
+  color: ${productionColors.text.secondary};
+`;
+
+const ErrorText = styled.p`
+  text-align: center;
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 8px;
 `;
 
 const Spinner = styled.div`
-  width: 22px;
-  height: 22px;
-  border: 3px solid rgba(255,255,255,0.3);
-  border-top-color: white;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
   border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
+  animation: ${spin} .8s linear infinite;
+  margin: 0 auto;
 `;
 
-/* =========================
-   Component
-========================= */
+/* ===================== COMPONENT ===================== */
 
 const EmergencySOS: React.FC<EmergencySOSProps> = ({
   onSOSActivated,
   emergencyContacts = [],
   userName = 'User',
 }) => {
-  const [isHolding, setIsHolding] = useState(false);
-  const [countdown, setCountdown] = useState(3);
-  const [sosStatus, setSOSStatus] = useState<'idle' | 'active' | 'sent'>('idle');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<LocationData | null>(null);
-  const [sentContacts, setSentContacts] = useState<Set<string>>(new Set());
-  const [showCancelOption, setShowCancelOption] = useState(false);
 
-  /* 🔴 NEW — processing state (Issue #71) */
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
-
-  const defaultContacts: EmergencyContact[] = useMemo(
+  const defaultContacts = useMemo(
     () =>
-      emergencyContacts.length > 0
+      emergencyContacts.length
         ? emergencyContacts
         : [
             { id: '1', name: 'Emergency Services', phone: '911', type: 'emergency' },
             { id: '2', name: 'Family Contact', phone: '+1 555-0123', type: 'family' },
-            { id: '3', name: 'Medical Emergency', phone: '108', type: 'medical' },
           ],
     [emergencyContacts]
   );
 
+  /* ---------- Location ---------- */
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp,
-          });
-        },
-        (error) => console.error('Location error:', error)
-      );
-    }
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      pos =>
+        setLocation({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: pos.timestamp,
+        }),
+      err => console.error(err)
+    );
   }, []);
 
-  const handleSOSActivate = useCallback(() => {
-    if (isProcessing) return;
+  /* ---------- SOS ACTION ---------- */
+  const handleSOSActivate = useCallback(async () => {
+    if (loading) return;
 
-    setIsProcessing(true);
-    setSOSStatus('active');
-    setShowCancelOption(true);
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
 
-    let contactIndex = 0;
-    const sendInterval = setInterval(() => {
-      if (contactIndex < defaultContacts.length) {
-        setSentContacts((prev) => new Set(prev).add(defaultContacts[contactIndex].id));
-        contactIndex++;
-      } else {
-        clearInterval(sendInterval);
-        setSOSStatus('sent');
-        setIsProcessing(false);
+    try {
+      await alertNotificationService.triggerAlert(
+        'CRITICAL',
+        'Emergency SOS Activated',
+        `Emergency SOS triggered by ${userName}`
+      );
 
-        onSOSActivated?.({
-          timestamp: new Date(),
-          location,
-          contacts: defaultContacts,
-          status: 'sent',
-          message: `Emergency SOS from ${userName}`,
-        });
-      }
-    }, 800);
-  }, [isProcessing, defaultContacts, location, userName, onSOSActivated]);
+      setSuccess(true);
 
-  const handleHoldStart = () => {
-    if (isProcessing) return;
+      onSOSActivated?.({
+        timestamp: new Date(),
+        location,
+        contacts: defaultContacts,
+        status: 'sent',
+        message: `Emergency SOS from ${userName}`,
+      });
+    } catch (e) {
+      console.error(e);
+      setError('Failed to send emergency alert. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, userName, location, defaultContacts, onSOSActivated]);
 
-    setIsHolding(true);
-    setCountdown(3);
-
-    let count = 3;
-    countdownRef.current = setInterval(() => {
-      count -= 1;
-      setCountdown(count);
-
-      if (count <= 0) {
-        countdownRef.current && clearInterval(countdownRef.current);
-        setIsHolding(false);
-        handleSOSActivate();
-      }
-    }, 1000);
-  };
-
-  const handleHoldEnd = () => {
-    setIsHolding(false);
-    setCountdown(3);
-    countdownRef.current && clearInterval(countdownRef.current);
-  };
+  /* ===================== UI ===================== */
 
   return (
     <Container>
       <Header>
         <Title>🆘 Emergency SOS</Title>
-        <Subtitle>
-          {isProcessing
-            ? 'Processing emergency request…'
-            : 'Press and hold the button for 3 seconds'}
-        </Subtitle>
+        <Subtitle>Press the button to trigger an emergency alert</Subtitle>
       </Header>
 
-      <SOSButtonContainer>
-        <SOSButtonOuter $active={sosStatus === 'active'}>
-          <SOSButton
-            $holding={isHolding}
-            $countdown={countdown}
-            onMouseDown={handleHoldStart}
-            onMouseUp={handleHoldEnd}
-            onMouseLeave={handleHoldEnd}
-            onTouchStart={handleHoldStart}
-            onTouchEnd={handleHoldEnd}
-            disabled={isProcessing || sosStatus !== 'idle'}
-          >
-            {isProcessing ? <Spinner /> : <SOSText>SOS</SOSText>}
-            <CountdownOverlay $show={isHolding}>{countdown}</CountdownOverlay>
-          </SOSButton>
-        </SOSButtonOuter>
-      </SOSButtonContainer>
+      <ButtonWrapper>
+        <SOSButton onClick={handleSOSActivate} disabled={loading || success}>
+          {loading ? <Spinner /> : 'SOS'}
+        </SOSButton>
+      </ButtonWrapper>
 
       <InstructionText>
-        {isProcessing && 'Please wait while alerts are being sent'}
-        {sosStatus === 'sent' && 'Emergency alerts sent successfully'}
+        {loading && 'Processing emergency alert…'}
+        {!loading && success && 'Emergency alert sent successfully!'}
+        {!loading && !success && !error && 'Tap SOS to send an emergency alert'}
       </InstructionText>
+
+      {error && <ErrorText>{error}</ErrorText>}
     </Container>
   );
 };

@@ -24,7 +24,9 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import logger from './utils/logger';
 import { productionColors } from './styles/production-ui-system';
 import './utils/locationOverride';
-
+import Footer from "./components/Footer";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsAndConditions from "./pages/TermsAndConditions";
 // Skip to content link for accessibility
 const SkipToContent = styled.a`
   position: absolute;
@@ -110,7 +112,10 @@ const AppContent: React.FC = () => {
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/evacuation" element={<EvacuationPage />} />
             <Route path="/verify" element={<VerificationDashboard />} />
+            <Route path="/terms" element={<TermsAndConditions />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           </Routes>
+          <Footer />
         </ErrorBoundary>
       </div>
       
